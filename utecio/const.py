@@ -1,3 +1,6 @@
+"""Constants for Utecio API Library"""
+
+from enum import Enum
 
 BATTERY_LEVEL = {-1:"Depleted", 0:"Replace", 1:"Low", 2:"Medium", 3:"High"}
 LOCK_MODE = {0:"Normal", 1:"Passage Mode", 2:"Lockout Mode"}
@@ -7,3 +10,381 @@ UL1_BT = "Ultraloq UL-1"
 Latch5_NFC = "Latch-5-NFC"
 BLE_RETRY_DELAY_DEF = 1.5
 BLE_RETRY_MAX_DEF = 4
+
+
+class DeviceLockModel(Enum):
+    UL1BT = "UL1-BT"
+    Latch5NFC = "Latch-5-NFC"
+    Latch5F = "Latch-5-F"
+    BoltNFC = "Bolt-NFC"
+    LEVER = "LEVER"
+    UBolt = "U-Bolt"
+    UBoltWiFi = "U-Bolt-WiFi"
+    UBoltZWave = "U-Bolt-ZWave"
+    UL3 = "SmartLockByBle"
+    UL3_2ND = "UL3-2ND"
+    UL300 = "UL300"
+
+
+class DeviceBatteryLevel(Enum):
+    NOTSET = -1
+    HIGH = 3
+    MEDIUM = 2
+    LOW = 1
+    CRITICAL = 0
+    DEPLETED = -1
+
+
+class DeviceLockWorkMode(Enum):
+    NOTSET = -1
+    NORMAL = 0
+    PASSAGE = 1
+    LOCKOUT = 2
+
+
+class DeviceLockStatus(Enum):
+    NOTSET = -1
+    UNAVAILABLE = 0
+    UNLOCKED = 1
+    LOCKED = 2
+    NOTAVAILABLE = 255
+
+
+class BLECommandCode(Enum):
+    LOCK_STATUS = 80
+    GET_LOCK_STATUS = 81
+    GET_BATTERY = 67
+    GET_SN = 94
+    GET_MUTE = 83
+    UNLOCK = 85
+    BOLT_LOCK = 86
+    SET_LOCK_STATUS = 82
+    REBOOT = 23
+    DOORSENSOR = 117
+    GET_AUTOLOCK = 90
+    SET_AUTOLOCK = 89
+    SET_WORK_MODE = 160
+    ADMIN_LOGIN = 32
+    READ_TIME = 65
+    WRITE_TIME = 66
+
+
+class BleResponseCode(Enum):
+    LOCK_STATUS = 208
+    GET_LOCK_STATUS = 209
+    GET_BATTERY = 195
+    UNLOCK = 213
+    BOLT_LOCK = 214
+    SET_LOCK_STATUS = 210
+    GET_SN = 222
+    GET_MUTE = 211
+    DOORSENSOR = 245
+    SET_AUTOLOCK = 217
+    GET_AUTOLOCK = 218
+    SET_WORK_MODE = 32
+    ADMIN_LOGIN = 160
+    READ_TIME = 193
+    WRITE_TIME = 194
+
+
+class DeviceServiceUUID(Enum):
+    LOCK = "00007200-0000-1000-8000-00805f9b34fb"
+    DATA = "00007201-0000-1000-8000-00805f9b34fb"
+
+
+class DeviceKeyUUID(Enum):
+    STATIC = "00007220-0000-1000-8000-00805f9b34fb"
+    MD5 = "00007223-0000-1000-8000-00805f9b34fb"
+    ECC = "00007221-0000-1000-8000-00805f9b34fb"
+
+
+class BleRequestSchedule(Enum):
+    IMMEDIATE = 0
+    NEXT_RUN = 1
+
+
+DEVICE_CONFIGS = {
+    'Latch-5-F': {
+        'bluetooth': True,
+        'autolock': True,
+        'update_wifi': True,
+        'alerts': True,
+        'mutemode': True,
+        'doublefp': True,
+        'keypad': True,
+        'fingprinter': True,
+        'needregristerpwd': True,
+        'havesn': True,
+        'moreadmin': True,
+        'timelimit': True,
+        'passage': True,
+        'lockout': True,
+        'bt264': True,
+        'keepalive': True,
+        'passageautolock': True,
+        'singlelatchboltmortic': True,
+        'smartphone_nfc': True,
+        'bt_close': True
+    },
+    'Latch-5-NFC': {
+        'bluetooth': True,
+        'autolock': True,
+        'update_wifi': True,
+        'alerts': True,
+        'mutemode': True,
+        'rfid': True,
+        'rfid_twice': True,
+        'keypad': True,
+        'needregristerpwd': True,
+        'havesn': True,
+        'moreadmin': True,
+        'timelimit': True,
+        'passage': True,
+        'lockout': True,
+        'bt264': True,
+        'keepalive': True,
+        'passageautolock': True,
+        'singlelatchboltmortic': True,
+        'smartphone_nfc': True,
+        'bt_close': True
+    },
+    'Ultraloq-1': {
+        'bluetooth': True,
+        'rfid': True,
+        'rfid_twice': True,
+        'fingprinter': True,
+        'autobolt': True,
+        'update_ota': True,
+        'update_oad': True,
+        'alerts': True,
+        'shakeopen': True,
+        'mutemode': True,
+        'passage': True,
+        'lockout': True,
+        'havesn': True,
+        'direction': True,
+        'keepalive': True,
+        'singlelatchboltmortic': True
+    },
+    'Bolt-NFC': {
+        'lock': True,
+        'bluetooth': True,
+        'autolock': True,
+        'update_ota': True,
+        'update_wifi': True,
+        'direction': True,
+        'alerts': True,
+        'mutemode': True,
+        'manual': True,
+        'shakeopen': True,
+        'havesn': True,
+        'rfid': True,
+        'keypad': True,
+        'needregristerpwd': True,
+        'timelimit': True,
+        'moreadmin': True,
+        'lockout': True,
+        'bt264': True,
+        'doorsensor': True,
+        'keepalive': True,
+        'autounlock': True,
+        'smartphone_nfc': True,
+        'update_2642': True,
+        'isautodirection': True,
+        'ishomekit': True
+    },
+    'Lever': {
+        'bluetooth': True,
+        'autolock': True,
+        'update_ota': True,
+        'alerts': True,
+        'mutemode': True,
+        'shakeopen': True,
+        'fingprinter': True,
+        'keypad': True,
+        'doublefp': True,
+        'needregristerpwd': True,
+        'havesn': True,
+        'moreadmin': True,
+        'timelimit': True,
+        'passage': True,
+        'lockout': True,
+        'bt264': True,
+        'keepalive': True,
+        'passageautolock': True,
+        'singlelatchboltmortic': True
+    },
+    'UBolt': {
+        'lock': True,
+        'bluetooth': True,
+        'autolock': True,
+        'autounlock': True,
+        'update_ota': True,
+        'direction': True,
+        'alerts': True,
+        'mutemode': True,
+        'manual': True,
+        'shakeopen': True,
+        'havesn': True,
+        'moreadmin': True,
+        'needreadmodel': True,
+        'keypad': True,
+        'lockout': True,
+        'timelimit': True,
+        'needregristerpwd': True,
+        'bt264': True,
+        'keepalive': True
+    },
+    'UBolt-Pro': {
+        'lock': True,
+        'bluetooth': True,
+        'autolock': True,
+        'autounlock': True,
+        'update_ota': True,
+        'direction': True,
+        'alerts': True,
+        'mutemode': True,
+        'manual': True,
+        'shakeopen': True,
+        'havesn': True,
+        'moreadmin': True,
+        'needreadmodel': True,
+        'keypad': True,
+        'lockout': True,
+        'timelimit': True,
+        'needregristerpwd': True,
+        'bt264': True,
+        'keepalive': True
+    },
+    'UBolt-Pro-Wifi': {
+        'lock': True,
+        'bluetooth': True,
+        'autolock': True,
+        'update_ota': True,
+        'update_wifi': True,
+        'direction': True,
+        'alerts': True,
+        'mutemode': True,
+        'manual': True,
+        'shakeopen': True,
+        'havesn': True,
+        'needreadmodel': True,
+        'keypad': True,
+        'needregristerpwd': True,
+        'timelimit': True,
+        'moreadmin': True,
+        'lockout': True,
+        'bt264': True,
+        'doorsensor': True,
+        'keepalive': True,
+        'autounlock': True
+    },
+    'Ubolt-Wifi': {
+        'lock': True,
+        'bluetooth': True,
+        'autolock': True,
+        'update_ota': True,
+        'update_wifi': True,
+        'direction': True,
+        'alerts': True,
+        'mutemode': True,
+        'manual': True,
+        'shakeopen': True,
+        'havesn': True,
+        'needreadmodel': True,
+        'keypad': True,
+        'needregristerpwd': True,
+        'timelimit': True,
+        'moreadmin': True,
+        'lockout': True,
+        'bt264': True,
+        'doorsensor': True,
+        'keepalive': True,
+        'autounlock': True
+    },
+    'UBolt-ZWave': {
+        'lock': True,
+        'bluetooth': True,
+        'autolock': True,
+        'update_ota': True,
+        'direction': True,
+        'alerts': True,
+        'mutemode': True,
+        'manual': True,
+        'shakeopen': True,
+        'havesn': True,
+        'needreadmodel': True,
+        'keypad': True,
+        'needregristerpwd': True,
+        'timelimit': True,
+        'moreadmin': True,
+        'lockout': True,
+        'bt264': True,
+        'doorsensor': True,
+        'keepalive': True,
+        'autounlock': True,
+        'zwave': True
+    },
+    'Ultraloq-3': {
+        'bluetooth': True,
+        'autolock': True,
+        'update_ota': True,
+        'alerts': True,
+        'mutemode': True,
+        'shakeopen': True,
+        'fingprinter': True,
+        'keypad': True,
+        'doublefp': True,
+        'needregristerpwd': True,
+        'havesn': True,
+        'locklocal': True,
+        'needsycbuser': True,
+        'moreadmin': True,
+        'customuserid': True,
+        'timelimit': True,
+        'passage': True,
+        'lockout': True,
+        'bt264': True,
+        'keepalive': True,
+        'passageautolock': True,
+        'singlelatchboltmortic': True
+    },
+    'Ultraloq-300': {
+        'bluetooth': True,
+        'rfid': True,
+        'rfid_once': True,
+        'keypad': True,
+        'fingprinter': True,
+        'update_ota': True,
+        'update_oad': True,
+        'alerts': True,
+        'shakeopen': True,
+        'mutemode': True,
+        'moreadmin': True,
+        'timelimit': True,
+        'passage': True,
+        'lockout': True,
+        'morelanguage': True,
+        'locklocal': True,
+        'needsycbuser': True,
+        'havesn': True,
+        'keepalive': True,
+        'singlelatchboltmortic': True,
+        'adduserremovenum': 5
+    },
+    'Utec-Generic': {
+        'bluetooth': True,
+        'keypad': True,
+        'fingprinter': True,
+        'shakeopen': True,
+        'morepwd': True,
+        'passage': True,
+        'lockout': True,
+        'locklocal': True,
+        'needsycbuser': True,
+        'clone': True,
+        'customuserid': True,
+        'singlelatchboltmortic': True,
+        'keepalive': True
+    }
+}

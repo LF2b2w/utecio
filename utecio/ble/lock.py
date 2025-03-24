@@ -1,8 +1,9 @@
 import datetime
 
-from ..enums import BLECommandCode, DeviceLockWorkMode
+from .device import UtecBleDevice
 from ..util import to_byte_array
-from .device import UtecBleDevice, UtecBleRequest
+from ..const import BLECommandCode, DeviceLockWorkMode
+from ..api import UtecBleRequest
 
 
 class UtecBleLock(UtecBleDevice):
@@ -23,6 +24,11 @@ class UtecBleLock(UtecBleDevice):
             device_name=device_name,
             device_model=device_model,
         )
+        self.bolt_status: int = -1
+        self.lock_mode: int = -1
+        self.lock_status: int = -1
+        self.autolock_time: int = -1
+        self.battery: int = -1
 
     async def async_unlock(self, update: bool = True):
         if update:

@@ -3,7 +3,7 @@ import asyncio
 from bleak import BleakScanner
 from bleak.backends.device import BLEDevice
 from .ble.lock import UtecBleLock
-from .api import UtecClient, logger as liblogger
+from .cloud import UtecClient, logger as liblogger
 
 EMAIL = "your@email.com" # Your Utec app username/email
 PASSWORD = "your_password" # Your Utec App Password

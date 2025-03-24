@@ -1,5 +1,7 @@
 import datetime
 import struct
+from dataclasses import dataclass, field
+from typing import Dict, List
 
 
 def date_from_4bytes(byte_array:bytes):
@@ -84,5 +86,76 @@ def decode_password(password: int) -> str:
     except Exception as e:
         print(e)
 
-class DeviceNotAvailable(Exception):
-    """Device not visible on Bluetooth Network."""
+@dataclass
+class DeviceDefinition:
+    model: str = ""
+    # Core features
+    lock: bool = False
+    door: bool = False
+    keypad: bool = False
+
+    # Authentication methods
+    fingprinter: bool = False
+    doublefp: bool = False
+    bluetooth: bool = False
+    rfid: bool = False
+    rfid_once: bool = False
+    rfid_twice: bool = False
+    smartphone_nfc: bool = False
+
+    # Automatic features
+    autobolt: bool = False
+    autolock: bool = False
+    autounlock: bool = False
+    passageautolock: bool = False
+
+    # Updates and connectivity
+    update_ota: bool = False
+    update_oad: bool = False
+    update_wifi: bool = False
+    update_2642: bool = False
+    bt264: bool = False
+    keepalive: bool = False
+    zwave: bool = False
+
+    # Settings and modes
+    alerts: bool = False
+    mutemode: bool = False
+    passage: bool = False
+    lockout: bool = False
+    manual: bool = False
+    shakeopen: bool = False
+    direction: bool = False
+    isautodirection: bool = False
+
+    # Administrative features
+    moreadmin: bool = False
+    morepwd: bool = False
+    timelimit: bool = False
+    morelanguage: bool = False
+    needregristerpwd: bool = False
+    locklocal: bool = False
+
+    # System properties
+    havesn: bool = False
+    clone: bool = False
+    customuserid: bool = False
+    doorsensor: bool = False
+    needreadmodel: bool = False
+    needsycbuser: bool = False
+    bt_close: bool = False
+    singlelatchboltmortic: bool = False
+    ishomekit: bool = False
+    isyeeuu: bool = False
+
+    # Arrays and counters
+    secondsarray: List[int] = field(default_factory=list)
+    mtimearray: List[int] = field(default_factory=list)
+    adduserremovenum: int = 4
+
+def create_device_capabilities(name: str, model: str, features: Dict[str, bool]) -> type:
+    """Factory function to create device classes with specific features."""
+    return type(name, (DeviceDefinition,), {
+        'model': model,
+        '__init__': lambda self: self.__dict__.update(features)
+    })
