@@ -1,7 +1,7 @@
-import datetime
+"""Abstraction layer for Utec Locks using bluetooth"""
 
 from .device import UtecBleDevice
-from ..util import to_byte_array
+from ..util import int_to_bytes
 from ..const import BLECommandCode, DeviceLockWorkMode
 from ..api import UtecBleRequest
 
@@ -67,7 +67,7 @@ class UtecBleLock(UtecBleDevice):
             self.add_request(
                 UtecBleRequest(
                     BLECommandCode.SET_AUTOLOCK,
-                    data=to_byte_array(seconds, 2) + bytes([0]),
+                    data=int_to_bytes(seconds, 2) + bytes([0]),
                 )
             )
         await self.send_requests()

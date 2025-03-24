@@ -1,3 +1,5 @@
+"""Base Device Class for Utecio Devices"""
+
 import datetime
 from logging import logger
 
@@ -11,10 +13,10 @@ from bleak_retry_connector import establish_connection, BleakNotFoundError, get_
 
 from utecio.const import DEVICE_CONFIGS
 
-
 from ..util import decode_password, DeviceDefinition
-from ..api import UtecBleDeviceKey, UtecBleRequest
+from ..api import UtecBleRequest
 from ..exceptions import UtecBleDeviceError, UtecBleError, UtecBleNotFoundError
+from ..crypto import UtecKeyExchange
 
 
 class UtecBleDevice:
@@ -139,7 +141,7 @@ class UtecBleDevice:
                     ) from None
 
             try:
-                aes_key = await UtecBleDeviceKey.get_shared_key(
+                aes_key = await UtecKeyExchange.get_shared_key(
                     client=client, device=self
                 )
             except Exception:

@@ -1,90 +1,163 @@
-import datetime
-import struct
+"""Utecio Device Utils"""
+
 from dataclasses import dataclass, field
-from typing import Dict, List
+import struct
+import datetime
+from typing import List, Optional, Union
 
 
-def date_from_4bytes(byte_array:bytes):
+def date_from_4bytes(byte_array: bytes) -> Optional[datetime.datetime]:
+    """Convert a 4-byte array to a datetime object.
+
+    Bit format:
+    - Bits 0-5: Seconds (0-59)
+    - Bits 6-11: Minutes (0-59)
+    - Bits 12-16: Hours (0-23)
+    - Bits 17-21: Day (1-31)
+    - Bits 22-25: Month (1-12)
+    - Bits 26-31: Year offset from 2000
+
+    Args:
+        byte_array: 4-byte data containing packed date/time
+
+    Returns:
+        Datetime object or None if conversion fails
+    """
     if byte_array is None or len(byte_array) < 4:
         return None
 
-    byte_to_int4 = struct.unpack('>I', byte_array[:4])[0]
-    seconds = byte_to_int4 & 63
-    year = ((byte_to_int4 >> 26) & 63) + 2000
-    month = ((byte_to_int4 >> 22) - 1) & 15
-    day = (byte_to_int4 >> 17) & 31
-    hour = (byte_to_int4 >> 12) & 31
-    minute = (byte_to_int4 >> 6) & 63
+    try:
+        value = struct.unpack('>I', byte_array[:4])[0]
 
-    return datetime.datetime(year, month, day, hour, minute, seconds)
+        seconds = value & 0x3F  # 6 bits (0-5)
+        minutes = (value >> 6) & 0x3F  # 6 bits (6-11)
+        hours = (value >> 12) & 0x1F  # 5 bits (12-16)
+        day = (value >> 17) & 0x1F  # 5 bits (17-21)
+        month = ((value >> 22) & 0x0F)  # 4 bits (22-25)
+        year = ((value >> 26) & 0x3F) + 2000  # 6 bits (26-31)
 
-def bytes_to_int2(byte_array:bytes) -> int:
-    result = 0
-    for i in range(1, -1, -1):
-        result = (result << 8) | (byte_array[i] & 0xFF)
-    return result
+        # Validate date components
+        if not (1 <= month <= 12 and 1 <= day <= 31 and 0 <= hours <= 23 and
+                0 <= minutes <= 59 and 0 <= seconds <= 59):
+            return None
 
-def byte_to_int4(byte_array, i):
-    result = 0
-    if byte_array is None:
-        return 0
-    for i3 in range(3, -1, -1):
-        result = (result << 8) | (byte_array[i + i3] & 0xFF)
-    return result
-
-def bytes_to_ascii(bArr: bytearray):
-    i = 0
-    i2 = len(bArr)
-    if not bArr or i < 0 or i2 <= 0 or i >= len(bArr) or len(bArr) - i < i2:
+        return datetime.datetime(year, month, day, hours, minutes, seconds)
+    except (ValueError, struct.error):
         return None
 
-    substring = bArr[i:i+i2]
-    if 0 in substring:
-        substring = substring[:substring.index(0)]
+
+def bytes_to_int2(byte_array: bytes) -> int:
+    """Convert a 2-byte array to an integer using little-endian format.
+
+    Args:
+        byte_array: 2-byte data
+
+    Returns:
+        Integer value
+    """
+    if byte_array is None or len(byte_array) < 2:
+        return 0
+
+    return int.from_bytes(byte_array[:2], byteorder='little')
+
+
+def bytes_to_int4(byte_array: bytes, offset: int = 0) -> int:
+    """Convert a 4-byte array to an integer using big-endian format.
+
+    Args:
+        byte_array: Byte array containing the data
+        offset: Starting position in the array
+
+    Returns:
+        Integer value
+    """
+    if byte_array is None or offset < 0 or offset + 4 > len(byte_array):
+        return 0
+
+    return int.from_bytes(byte_array[offset:offset+4], byteorder='big')
+
+
+def bytes_to_ascii(data: bytes) -> Optional[str]:
+    """Convert bytes to a ASCII string, stopping at first null byte.
+
+    Args:
+        data: Byte array to convert
+
+    Returns:
+        Decoded string or None if decoding fails
+    """
+    if not data:
+        return None
+
+    # Find first null byte if present
     try:
-        return substring.decode("ISO8859-1")
+        null_pos = data.index(0)
+        data = data[:null_pos]
+    except ValueError:
+        # No null byte found, use the whole array
+        pass
+
+    try:
+        return data.decode("ISO8859-1")
     except UnicodeDecodeError:
         return None
 
-def to_byte_array(value, size):
-    byte_array = bytearray(size)
-    for i in range(4):
-        if i < size:
-            byte_array[i] = (value >> (i * 8)) & 0xFF
-    return byte_array
+
+def int_to_bytes(value: int, size: int, byteorder: str = 'little') -> bytes:
+    """Convert an integer to a byte array.
+
+    Args:
+        value: Integer to convert
+        size: Number of bytes to use
+        byteorder: Byte order ('little' or 'big')
+
+    Returns:
+        Byte array representing the integer
+    """
+    return value.to_bytes(size, byteorder=byteorder)
+
 
 def decode_password(password: int) -> str:
-    """Decode the password that the API returns to the Admin Password."""
+    """Decode the password integer to the Admin Password string.
 
+    The format appears to be:
+    - First digit indicates password length
+    - Remaining digits are the actual password, potentially padded with zeros
+
+    Args:
+        password: Password value as an integer
+
+    Returns:
+        Decoded password string
+    """
     try:
-        byte_array = bytearray(4)
-        i3 = 0
-        while i3 < 4:
-            byte_array[i3] = (password >> (i3 * 8)) & 255
-            i3 += 1
+        # Convert to 4-byte array in little-endian
+        byte_array = int_to_bytes(password, 4, 'little')
 
-        str2 = ""
-        length = len(byte_array) - 1
-        while length >= 0:
-            hex_string = format(byte_array[length] & 0xFF, '02x')
-            length -= 1
-            if len(hex_string) == 1:
-                hex_string = "0" + hex_string
-            str2 = str2 + hex_string
-        parse_int = int(str2[0])
-        if parse_int == 0:
+        # Create hex representation of bytes in reverse order
+        hex_str = ''.join(f'{b:02x}' for b in reversed(byte_array))
+
+        # First digit indicates expected length
+        expected_length = int(hex_str[0])
+
+        # If first digit is 0, return original password as string
+        if expected_length == 0:
             return str(password)
-        str3 = str(int(str2[1:], 16))
-        if parse_int != len(str3):
-            str4 = str3
-            count = 0
-            while count < (parse_int - len(str3)):
-                str4 = "0" + str4
-                count += 1
-            return str4
-        return str3
+
+        # Convert remaining hex to decimal
+        password_value = int(hex_str[1:], 16)
+        password_str = str(password_value)
+
+        # Pad with leading zeros if needed
+        if len(password_str) < expected_length:
+            password_str = password_str.zfill(expected_length)
+
+        return password_str
     except Exception as e:
-        print(e)
+        # Log the error instead of printing
+        import logging
+        logging.error(f"Error decoding password: {e}")
+        return str(password)  # Fallback to string representation
 
 @dataclass
 class DeviceDefinition:
@@ -153,7 +226,7 @@ class DeviceDefinition:
     mtimearray: List[int] = field(default_factory=list)
     adduserremovenum: int = 4
 
-def create_device_capabilities(name: str, model: str, features: Dict[str, bool]) -> type:
+def create_device_capabilities(name: str, model: str, features: dict[str, bool]) -> type:
     """Factory function to create device classes with specific features."""
     return type(name, (DeviceDefinition,), {
         'model': model,
