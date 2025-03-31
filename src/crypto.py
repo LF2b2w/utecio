@@ -6,13 +6,14 @@ import logging
 import struct
 from typing import List, Optional
 
+from Crypto.Cipher import AES
+
 from bleak import BleakClient
-from crypto.Cipher import AES
 from ecdsa import SECP128r1, SigningKey
 from ecdsa.ellipticcurve import Point
 
-from utecio.exceptions import UtecEncryptionError
-from utecio.const import DeviceKeyUUID
+from src.exceptions import UtecEncryptionError
+from src.const import DeviceKeyUUID
 
 # Configure module logger
 logger = logging.getLogger(__name__)

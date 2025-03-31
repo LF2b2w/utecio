@@ -1,149 +1,227 @@
-"""Ble API for Utecio"""
+"""Base Device Class for Utecio Devices"""
 
 import asyncio
+import datetime
 import logging
-from typing import Optional
 
-from bleak import BleakClient, BleakScanner, AdvertisementData
+from collections.abc import Awaitable, Callable
+from typing import Any, Optional
+
+from bleak import BleakClient
+from bleak.exc import BleakError
 from bleak.backends.characteristic import BleakGATTCharacteristic
 from bleak.backends.device import BLEDevice
+from bleak_retry_connector import establish_connection, BleakNotFoundError, get_device
 
-from utecio.ble.device import UtecBleDevice
-from utecio.crypto import UtecEncryption, UtecKeyExchange
-from utecio.util import bytes_to_int2
-from utecio.exceptions import (
+from ..util import decode_password, bytes_to_int2, DeviceDefinition
+from src.crypto import UtecEncryption, UtecKeyExchange
+from src.exceptions import (
     UtecBleError,
     UtecConnectionError,
-    UtecProtocolError
+    UtecProtocolError,
+    UtecBleDeviceError,
+    UtecBleNotFoundError
 )
-from utecio.const import (
+from src.const import (
+    DEVICE_CONFIGS,
     LOCK_MODE,
     BOLT_STATUS,
     BATTERY_LEVEL,
-    UTEC_DEVICE_PREFIXES,
-    UTEC_MANUFACTURER_IDS,
     CRC8Table,
     BleResponseCode,
     BLECommandCode,
     DeviceServiceUUID
 )
 
-# Configure module logger
-logger = logging.getLogger(__name__)
+Logger = logging.getLogger(__name__)
 
+class UtecBleDevice:
+    def __init__(
+        self,
+        uid: str,
+        password: str,
+        mac_uuid: Any,
+        device_name: str,
+        wurx_uuid: Any = None,
+        device_model: str = "",
+        async_bledevice_callback: Callable[[str], Awaitable[BLEDevice | str]] = None,
+        error_callback: Callable[[str, Exception], None] = None,
+    ):
+        self.mac_uuid = mac_uuid
+        self.wurx_uuid = wurx_uuid
+        self.uid = uid
+        self.password: str = password
+        self.name = device_name
+        self.model: str = device_model
+        self.capabilities: Optional[DeviceDefinition] = None
+        self._requests: list[UtecBleRequest] = []
+        self.config: dict[str, Any]
+        self.async_bledevice_callback = async_bledevice_callback
+        self.error_callback = error_callback
+        self.mute: bool = False
+        self.sn: str = ""
+        self.calendar: datetime.datetime
+        self.is_busy = False
+        self.device_time_offset: datetime.timedelta
 
+    @classmethod
+    def from_json(cls, json_config: dict[str, Any]):
+        new_device = cls(
+            device_name=json_config["name"],
+            uid=str(json_config["user"]["uid"]),
+            password=decode_password(json_config["user"]["password"]),
+            mac_uuid=json_config["uuid"],
+            device_model=json_config["model"],
+        )
+        if json_config["params"]["extend_ble"]:
+            new_device.wurx_uuid = json_config["params"]["extend_ble"]
+        new_device.sn = json_config["params"]["serialnumber"]
+        new_device.model = json_config["model"]
+        new_device.config = json_config
+        
+        if new_device.model in DEVICE_CONFIGS:
+            new_device.capabilities = DEVICE_CONFIGS[new_device.model]
+        else:
+            new_device.capabilities = DEVICE_CONFIGS["Utec-Generic"]
+        
+        return new_device
 
-class UtecDeviceScanner:
-    """Scanner for discovering Utec BLE devices."""
+    async def async_update_status(self):
+        pass
 
-    def __init__(self):
-        """Initialize the scanner."""
-        self.discovered_devices: dict[str, dict] = {}
-        self._scanner = BleakScanner()
+    def error(self, e: Exception, note: str = "") -> Exception:
+        if note:
+            e.add_note(e)
 
-    def _device_filter(self, device: BLEDevice, adv: AdvertisementData) -> bool:
-        """Filter function to identify potential Utec devices.
+        if self.error_callback:
+            self.error_callback(e)
 
-        Args:
-            device: The BLE device
-            adv: Advertisement data
+        self.debug("(%s) %s", self.mac_uuid, e)
+        return e
 
-        Returns:
-            True if device appears to be a Utec device
-        """
-        # Check for Utec service UUIDs
-        for service_uuid in DeviceServiceUUID:
-            if service_uuid.value.lower() in [str(uuid).lower() for uuid in adv.service_uuids]:
-                return True
+    def debug(self, msg: object, *args: object):
+        if Logger.level < 20:
+            Logger.debug(msg, args)
 
-        # Check for known device name prefixes
-        if device.name:
-            for prefix in UTEC_DEVICE_PREFIXES:
-                if device.name.upper().startswith(prefix):
-                    return True
+    def add_request(self, request: "UtecBleRequest", priority: bool = False):
+        request.device = self
+        if priority:
+            self._requests.insert(0, request)
+        else:
+            self._requests.append(request)
 
-        # Check manufacturer data
-        if adv.manufacturer_data:
-            for mfr_id in UTEC_MANUFACTURER_IDS:
-                if mfr_id in adv.manufacturer_data:
-                    return True
-
-        return False
-
-    async def discover(self, timeout: float = 5.0) -> list[dict]:
-        """Discover Utec BLE devices.
-
-        Args:
-            timeout: Scan timeout in seconds
-
-        Returns:
-            List of discovered devices with details
-        """
-        logger.info(f"Starting Utec device discovery (timeout: {timeout}s)")
-        self.discovered_devices = {}
-
-        def _device_found_callback(device: BLEDevice, adv_data: AdvertisementData):
-            if self._device_filter(device, adv_data):
-                self.discovered_devices[device.address] = {
-                    "address": device.address,
-                    "name": device.name or "Unknown",
-                    "rssi": adv_data.rssi,
-                    "service_uuids": adv_data.service_uuids,
-                    "device": device
-                }
-
-        # Start scanner with callback
-        self._scanner.register_detection_callback(_device_found_callback)
-        await self._scanner.start()
-
-        # Wait for specified timeout
-        await asyncio.sleep(timeout)
-
-        # Stop scanner
-        await self._scanner.stop()
-
-        logger.info(f"Discovery complete. Found {len(self.discovered_devices)} potential Utec devices")
-        return list(self.discovered_devices.values())
-
-    async def get_device_details(self, address: str, timeout: float = 5.0) -> Optional[dict]:
-        """Get more details about a specific device by connecting to it.
-
-        Args:
-            address: Device MAC address
-            timeout: Connection timeout in seconds
-
-        Returns:
-            Device details or None if connection fails
-        """
-        if address not in self.discovered_devices:
-            logger.warning(f"Device {address} not in discovered devices")
-            return None
-
-        device_info = self.discovered_devices[address]
-        device = device_info["device"]
-
+    async def send_requests(self) -> bool:
+        client: BleakClient = None
         try:
-            logger.debug(f"Connecting to {address} to get device details")
-            async with BleakClient(device, timeout=timeout) as client:
-                # Check if this is definitely a Utec device by looking for key services
-                services = await client.get_services()
+            if len(self._requests) < 1:
+                raise self.error(
+                    UtecBleError(
+                        f"Unable to process requests for {self.name}({self.mac_uuid}).",
+                        "No commands to send.",
+                    )
+                )
 
-                has_data_service = bool(services.get_service(str(DeviceServiceUUID.DATA.value)))
+            self.is_busy = True
+            try:
+                if not (device := await self._get_bledevice(self.mac_uuid)):
+                    raise BleakNotFoundError()
+                client = await establish_connection(
+                    client_class=BleakClient,
+                    device=device,
+                    name=self.mac_uuid,
+                    max_attempts=1 if self.wurx_uuid else 2,
+                    ble_device_callback=self._brc_get_lock_device,
+                )
+            except (BleakNotFoundError, BleakError):
+                try:
+                    if not self.wurx_uuid:
+                        raise
 
-                # Get more device details if this is a Utec device
-                if has_data_service:
-                    # Here you could read device characteristics to get model, firmware version, etc.
-                    # This is device-specific so would need to be customized
-                    device_info["confirmed_utec_device"] = True
-                    # Example: device_info["model"] = await get_model_from_device(client)
-                else:
-                    device_info["confirmed_utec_device"] = False
+                    await self.async_wakeup_device()
+                    if not (device := await self._get_bledevice(self.mac_uuid)):
+                        raise BleakNotFoundError("Wakeup device not found.")
 
-                return device_info
+                    client = await establish_connection(
+                        client_class=BleakClient,
+                        device=device,
+                        name=self.mac_uuid,
+                        max_attempts=2,
+                        ble_device_callback=self._brc_get_lock_device,
+                    )
+                except (BleakError, BleakNotFoundError):
+                    raise self.error(
+                        UtecBleNotFoundError(
+                            f"Could not connect to device {self.name}({self.mac_uuid}).",
+                            "Device not found after 2 attempts.",
+                        )
+                    ) from None
 
-        except Exception as e:
-            logger.error(f"Error getting details for device {address}: {str(e)}")
-            return None
+            try:
+                aes_key = await UtecKeyExchange.get_shared_key(
+                    client=client, device=self
+                )
+            except Exception:
+                raise self.error(
+                    UtecBleDeviceError(
+                        f"Error communicating with device {self.name}({self.mac_uuid}).",
+                        "Could not retrieve shared key.",
+                    )
+                ) from None
+
+            for request in self._requests[:]:
+                if not request.sent or not request.response.completed:
+                    Logger.debug("(%s) Sending command - %s (%s)",self.mac_uuid,request.command.name,request.package.hex())
+                    request.aes_key = aes_key
+                    request.device = self
+                    request.sent = True
+                    try:
+                        await request._get_response(client)
+                        self._requests.remove(request)
+
+                    except Exception:
+                        raise self.error(
+                            UtecBleDeviceError(
+                                f"Error communicating with device {self.name}({self.mac_uuid}).",
+                                f"Command {request.command.name} failed.",
+                            )
+                        ) from None
+
+        except Exception:  # unhandled
+            raise
+
+        finally:
+            self._requests.clear()
+            if client:
+                await client.disconnect()
+            self.is_busy = False
+
+    async def _get_bledevice(self, address: str) -> BLEDevice:
+        device = (
+            await self.async_bledevice_callback(address)
+            if self.async_bledevice_callback
+            else await get_device(address)
+        )
+        return device
+
+    async def _brc_get_lock_device(self) -> BLEDevice:
+        return await self._get_bledevice(self.mac_uuid)
+
+    async def _brc_get_wurx_device(self) -> BLEDevice:
+        return await self._get_bledevice(self.wurx_uuid)
+
+    async def async_wakeup_device(self):
+        if not (device := await self._get_bledevice(self.wurx_uuid)):
+            raise BleakNotFoundError()
+
+        wclient: BleakClient = await establish_connection(
+            client_class=BleakClient,
+            device=device,
+            name=self.wurx_uuid,
+            max_attempts=2,
+            ble_device_callback=self._brc_get_wurx_device,
+        )
+        self.debug("(%s) Wake-up reciever %s connected.", self.mac_uuid, self.wurx_uuid)
+        await wclient.disconnect()
 
 class UtecBleRequest:
     """Handles creating and sending BLE commands to Utec devices."""
@@ -293,11 +371,10 @@ class UtecBleRequest:
             try:
                 await client.stop_notify(self.uuid)
             except Exception:
-                logger.warning(
+                Logger.warning(
                     f"({self.device.mac_uuid}) Failed to stop notifications"
                 )
-
-
+    
 class UtecBleResponse:
     """Processes and handles BLE responses from Utec devices."""
 
@@ -336,7 +413,7 @@ class UtecBleResponse:
                 self.response_completed.set()
         except Exception as e:
             error_msg = f"({self.device.mac_uuid}) Error receiving write response: {str(e)}"
-            logger.error(error_msg)
+            Logger.error(error_msg)
             raise UtecProtocolError(error_msg) from e
 
     def reset(self) -> None:
@@ -442,7 +519,7 @@ class UtecBleResponse:
         try:
             return BleResponseCode(self.buffer[3]) if self.completed else None
         except ValueError:
-            logger.warning(
+            Logger.warning(
                 f"({self.device.mac_uuid}) Unknown response code: {self.buffer[3]}"
             )
             return None
@@ -471,7 +548,7 @@ class UtecBleResponse:
     async def _process_response(self) -> None:
         """Process the complete response and dispatch to appropriate handler."""
         try:
-            logger.debug(
+            Logger.debug(
                 "(%s) Response %s (%s): %s",
                 self.device.mac_uuid,
                 self.command.name if self.command else "Unknown",
@@ -482,13 +559,13 @@ class UtecBleResponse:
             if self.command:
                 await self._dispatch_response_handler()
 
-            logger.debug(
+            Logger.debug(
                 f"({self.device.mac_uuid}) Command Completed - {self.command.name if self.command else 'Unknown'}"
             )
 
         except Exception as e:
             error_msg = f"({self.device.mac_uuid}) Error processing response: {str(e)}"
-            logger.error(error_msg)
+            Logger.error(error_msg)
 
     async def _dispatch_response_handler(self) -> None:
         """Route response to appropriate handler based on command type."""
@@ -514,7 +591,7 @@ class UtecBleResponse:
         """Handle lock status response."""
         self.device.lock_mode = int(self.data[0])
         self.device.bolt_status = int(self.data[1])
-        logger.debug(
+        Logger.debug(
             f"({self.device.mac_uuid}) lock:{self.device.lock_mode} "
             f"({LOCK_MODE.get(self.device.lock_mode, 'Unknown')}) | "
             f"bolt:{self.device.bolt_status} "
@@ -524,14 +601,14 @@ class UtecBleResponse:
     async def _handle_set_lock_status(self) -> None:
         """Handle set lock status response."""
         self.device.lock_mode = self.data[0]
-        logger.debug(
+        Logger.debug(
             f"({self.device.mac_uuid}) workmode:{self.device.lock_mode}"
         )
 
     async def _handle_battery(self) -> None:
         """Handle battery status response."""
         self.device.battery = int(self.data[0])
-        logger.debug(
+        Logger.debug(
             f"({self.device.mac_uuid}) power level:{self.device.battery}, "
             f"{BATTERY_LEVEL.get(self.device.battery, 'Unknown')}"
         )
@@ -539,7 +616,7 @@ class UtecBleResponse:
     async def _handle_autolock(self) -> None:
         """Handle autolock time response."""
         self.device.autolock_time = bytes_to_int2(self.data[:2])
-        logger.debug(
+        Logger.debug(
             f"({self.device.mac_uuid}) autolock:{self.device.autolock_time}"
         )
 
@@ -547,21 +624,21 @@ class UtecBleResponse:
         """Handle set autolock time response."""
         if self.success:
             self.device.autolock_time = bytes_to_int2(self.data[:2])
-            logger.debug(
+            Logger.debug(
                 f"({self.device.mac_uuid}) autolock:{self.device.autolock_time}"
             )
 
     async def _handle_serial_number(self) -> None:
         """Handle serial number response."""
         self.device.sn = self.data.decode("ISO8859-1")
-        logger.debug(
+        Logger.debug(
             f"({self.device.mac_uuid}) serial:{self.device.sn}"
         )
 
     async def _handle_mute(self) -> None:
         """Handle mute status response."""
         self.device.mute = bool(self.data[0])
-        logger.debug(
+        Logger.debug(
             f"({self.device.mac_uuid}) mute:{self.device.mute}"
         )
 
@@ -569,19 +646,19 @@ class UtecBleResponse:
         """Handle set work mode response."""
         if self.success:
             self.device.lock_mode = self.data[0]
-            logger.debug(
+            Logger.debug(
                 f"({self.device.mac_uuid}) workmode:{self.device.lock_mode}"
             )
 
     async def _handle_unlock(self) -> None:
         """Handle unlock response."""
-        logger.debug(
+        Logger.debug(
             f"({self.device.mac_uuid}) {self.device.name} - Unlocked."
         )
 
     async def _handle_bolt_lock(self) -> None:
         """Handle bolt lock response."""
-        logger.debug(
+        Logger.debug(
             f"({self.device.mac_uuid}) {self.device.name} - Bolt Locked"
         )
 
@@ -589,7 +666,7 @@ class UtecBleResponse:
         """Handle extended lock status response."""
         self.device.lock_status = int(self.data[0])
         self.device.bolt_status = int(self.data[1])
-        logger.debug(
+        Logger.debug(
             f"({self.device.mac_uuid}) lock:{self.device.lock_status} | "
             f"bolt:{self.device.bolt_status}"
         )
@@ -599,7 +676,7 @@ class UtecBleResponse:
             self.device.battery = int(self.data[2])
             self.device.lock_mode = int(self.data[3])
             self.device.mute = bool(self.data[4])
-            logger.debug(
+            Logger.debug(
                 f"({self.device.mac_uuid}) power level:{self.device.battery} | "
                 f"mute:{self.device.mute} | mode:{self.device.lock_mode}"
             )
@@ -619,49 +696,3 @@ async def get_device_key(client: BleakClient, device: UtecBleDevice) -> bytes:
         UtecEncryptionError: If key exchange fails
     """
     return await UtecKeyExchange.get_shared_key(client, device)
-
-# Standalone function for simpler usage
-async def discover_utec_devices(timeout: float = 5.0) -> list[dict]:
-    """Discover Utec BLE devices.
-
-    Args:
-        timeout: Scan timeout in seconds
-
-    Returns:
-        List of discovered device details
-    """
-    scanner = UtecDeviceScanner()
-    return await scanner.discover(timeout)
-
-
-async def connect_and_create_device(device_info: dict, password: Optional[str] = None) -> Optional[UtecBleDevice]:
-    """Create a UtecBleDevice instance from discovered device information.
-
-    Args:
-        device_info: Device information from discovery
-        password: Optional device password
-
-    Returns:
-        Configured UtecBleDevice instance or None if connection fails
-    """
-    try:
-        address = device_info["address"]
-        name = device_info["name"]
-
-        # Create device instance
-        device = UtecBleDevice(
-            mac_address=address,
-            name=name,
-            password=password
-        )
-
-        # Test connection to verify device works
-        await device.connect()
-        await device.disconnect()
-
-        logger.info(f"Successfully created and tested device: {name} ({address})")
-        return device
-
-    except Exception as e:
-        logger.error(f"Failed to create device: {str(e)}")
-        return None

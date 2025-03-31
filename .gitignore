@@ -8,3 +8,7 @@ dist
 .vscode
 utecio/testint.py
 build
+
+test
+utec_ble
+utec_ble/bleLock

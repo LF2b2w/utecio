@@ -1,9 +1,12 @@
 """Utecio Device Utils"""
 
 from dataclasses import dataclass, field
+import logging
 import struct
 import datetime
 from typing import List, Optional, Union
+
+logger = logging.getLogger(__name__)
 
 
 def date_from_4bytes(byte_array: bytes) -> Optional[datetime.datetime]:
@@ -131,32 +134,38 @@ def decode_password(password: int) -> str:
         Decoded password string
     """
     try:
+        logger.info('password: %s', password)
         # Convert to 4-byte array in little-endian
         byte_array = int_to_bytes(password, 4, 'little')
+        logger.info('byte_array: %s', byte_array)
 
         # Create hex representation of bytes in reverse order
         hex_str = ''.join(f'{b:02x}' for b in reversed(byte_array))
+        logger.info('Hex String: %s', hex_str)
 
         # First digit indicates expected length
         expected_length = int(hex_str[0])
 
         # If first digit is 0, return original password as string
         if expected_length == 0:
+            logger.info('Length is 0. Password is a string. Returning Password: %s', password)
             return str(password)
 
         # Convert remaining hex to decimal
         password_value = int(hex_str[1:], 16)
+        logger.info('Password converted from hex to dec: %s', password_value)
         password_str = str(password_value)
+        logger.info('Converted Password string: %s', password_str)
 
         # Pad with leading zeros if needed
         if len(password_str) < expected_length:
             password_str = password_str.zfill(expected_length)
+            logger.info('password padded to meet expected length. Password: %s', password_str)
 
         return password_str
     except Exception as e:
         # Log the error instead of printing
-        import logging
-        logging.error(f"Error decoding password: {e}")
+        logger.error(f"Error decoding password: {e}")
         return str(password)  # Fallback to string representation
 
 @dataclass

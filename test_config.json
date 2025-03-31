@@ -1,0 +1,35 @@
+{
+    "use_real_devices": true,
+    "devices": [
+      {
+        "name": "UBolt-Pro-Wifi",
+        "mac_address": "EC:DA:3B:22:AE:75",
+        "device_id": "EC:DA:3B:22:AE:75",
+        "password": "0155",
+        "model": "UBolt-Pro",
+        "capabilities": {
+          "lock": true,
+          "bluetooth": true,
+          "autolock": true,
+          "update_ota": true,
+          "update_wifi": true,
+          "direction": true,
+          "alerts": true,
+          "mutemode": true,
+          "manual": true,
+          "shakeopen": true,
+          "havesn": true,
+          "needreadmodel": true,
+          "keypad": true,
+          "needregristerpwd": true,
+          "timelimit": true,
+          "moreadmin": true,
+          "lockout": true,
+          "bt264": true,
+          "doorsensor": true,
+          "keepalive": true,
+          "autounlock": true
+        }
+      }
+    ]
+  }

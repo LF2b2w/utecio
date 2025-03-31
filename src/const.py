@@ -103,10 +103,9 @@ class DeviceKeyUUID(Enum):
 # Misc things that might be helpful later
 
 #bleLock: mBleLock \u4e3a\u7a7a
-# UUIDUtils: 0000%04x-0000-1000-8000-00805f9b34fb
 #REQ_BLE_CODE:I = 0x376
 #REQ_BLE_OPEN:I = 0x280
-#EcdhApi: anvizecc
+#Ecdh: anvizecc
 #BleLockKey: Anviz.ut
 
 #UUID: 00002902-0000-1000-8000-00805f9b34fb

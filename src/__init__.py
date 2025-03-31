@@ -47,10 +47,9 @@ from .const import (
 )
 
 # Import main functionality
-from .ble.device import UtecBleDevice
+from .ble.device import UtecBleDevice, UtecBleRequest, UtecBleResponse, get_device_key
 from .ble.lock import UtecBleLock
 from .cloud import UtecApiClient, UtecCloud
-from .api import UtecBleRequest, UtecBleResponse, get_device_key
 
 # Utility functions
 from .util import (

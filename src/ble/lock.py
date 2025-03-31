@@ -1,9 +1,8 @@
 """Abstraction layer for Utec Locks using bluetooth"""
 
-from .device import UtecBleDevice
+from .device import UtecBleDevice, UtecBleRequest
 from ..util import int_to_bytes
 from ..const import BLECommandCode, DeviceLockWorkMode
-from ..api import UtecBleRequest
 
 
 class UtecBleLock(UtecBleDevice):

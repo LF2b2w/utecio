@@ -24,3 +24,14 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/maeneak/utecio"
 Issues = "https://github.com/maeneak/utecio/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+license-files = []
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests as integration tests",
+    "real_device: marks tests as requiring real physical devices"
+]
+asyncio_default_fixture_loop_scope = "function"
